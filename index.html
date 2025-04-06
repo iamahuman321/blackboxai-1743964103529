@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vegetarian Meal Planner 3.0</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .btn-danger {
+      background: #ff4c4c;
+      color: white;
+    }
+    .btn-danger:hover {
+      background: #cc0000;
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+  <div class="container mx-auto p-8 bg-gray-800 rounded-lg shadow-2xl max-w-4xl">
+    <h1 class="text-5xl text-green-500 text-center mb-4">Vegetarian Meal Planner 3.0 🌱</h1>
+    <p class="text-center text-yellow-400 mb-8">Spin the wheel and discover one dish from each food group – every day, a surprise! 🎉</p>
+
+    <div class="text-center mb-8">
+      <button id="selectButton" class="bg-green-500 hover:bg-green-600 text-black font-bold py-3 px-6 rounded-full text-lg mr-4">
+        🎲 Generate Plan
+      </button>
+      <button id="resetButton" class="btn-danger font-bold py-3 px-6 rounded-full text-lg">
+        🗑 Reset
+      </button>
+    </div>
+
+    <div id="result" class="bg-gray-700 p-6 rounded-lg shadow-inner mb-8"></div>
+
+    <div class="border-t-2 border-gray-600 pt-8">
+      <h2 class="text-3xl text-green-500 mb-6">📦 Manage Groups & Dishes</h2>
+
+      <div class="mb-8">
+        <h3 class="text-xl text-green-400 mb-4">➕ Add New Group</h3>
+        <input type="text" id="newGroupName" placeholder="e.g., Gujarati Specials" 
+               class="w-full p-3 bg-gray-700 rounded-lg mb-4">
+        <button id="addGroupButton" class="bg-green-500 hover:bg-green-600 text-black font-bold py-2 px-4 rounded-lg">
+          Add Group
+        </button>
+      </div>
+
+      <div class="mb-8">
+        <h3 class="text-xl text-green-400 mb-4">🍽 Add New Dish</h3>
+        <select id="groupSelect" class="w-full p-3 bg-gray-700 rounded-lg mb-4"></select>
+        <input type="text" id="newDishName" placeholder="e.g., Undhiyu" 
+               class="w-full p-3 bg-gray-700 rounded-lg mb-4">
+        <button id="addDishButton" class="bg-green-500 hover:bg-green-600 text-black font-bold py-2 px-4 rounded-lg">
+          Add Dish
+        </button>
+      </div>
+
+      <div class="mb-8">
+        <h3 class="text-xl text-green-400 mb-4">✏️ Edit / Remove Dish</h3>
+        <select id="editGroupSelect" class="w-full p-3 bg-gray-700 rounded-lg mb-4"></select>
+        <select id="dishSelect" class="w-full p-3 bg-gray-700 rounded-lg mb-4"></select>
+        <input type="text" id="editDishName" placeholder="Edit selected dish" 
+               class="w-full p-3 bg-gray-700 rounded-lg mb-4">
+        <button id="editDishButton" class="bg-green-500 hover:bg-green-600 text-black font-bold py-2 px-4 rounded-lg mr-2">
+          Edit
+        </button>
+        <button id="removeDishButton" class="btn-danger font-bold py-2 px-4 rounded-lg">
+          Remove
+        </button>
+      </div>
+
+      <div>
+        <h3 class="text-xl text-green-400 mb-4">🗑 Remove Group</h3>
+        <select id="removeGroupSelect" class="w-full p-3 bg-gray-700 rounded-lg mb-4"></select>
+        <button id="removeGroupButton" class="btn-danger font-bold py-2 px-4 rounded-lg">
+          Remove Group
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="connectionStatus" class="fixed bottom-4 right-4 p-3 bg-green-600 text-white rounded-lg hidden">
+    Connected to server
+  </div>
+
+  <script>
+    let foodGroups = {};
+    let ws;
+
+    function connectWebSocket() {
+      ws = new WebSocket('ws://localhost:3000');
+
+      ws.addEventListener('open', () => {
+        console.log('Connected to server');
+        document.getElementById('connectionStatus').classList.remove('hidden');
+      });
+
+      ws.addEventListener('message', (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'INIT' || data.type === 'UPDATE') {
+          foodGroups = data.payload;
+          updateGroupDropdowns();
+          updateDishDropdown();
+        }
+      });
+
+      ws.addEventListener('close', () => {
+        document.getElementById('connectionStatus').classList.add('hidden');
+        setTimeout(connectWebSocket, 5000);
+      });
+
+      ws.addEventListener('error', (error) => {
+        console.error('WebSocket Error:', error);
+      });
+    }
+
+    function updateGroupDropdowns() {
+      ["groupSelect", "editGroupSelect", "removeGroupSelect"].forEach(id => {
+        const select = document.getElementById(id);
+        select.innerHTML = "";
+        for (let group in foodGroups) {
+          const option = document.createElement("option");
+          option.value = group;
+          option.textContent = group;
+          select.appendChild(option);
+        }
+      });
+    }
+
+    function updateDishDropdown() {
+      const group = document.getElementById("editGroupSelect").value;
+      const dishSelect = document.getElementById("dishSelect");
+      dishSelect.innerHTML = "";
+      if (foodGroups[group]) {
+        foodGroups[group].forEach(dish => {
+          let option = document.createElement("option");
+          option.value = dish;
+          option.textContent = dish;
+          dishSelect.appendChild(option);
+        });
+      }
+    }
+
+    function sendUpdate() {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'UPDATE', payload: foodGroups }));
+      }
+    }
+
+    // Initialize WebSocket connection
+    connectWebSocket();
+
+    // Event listeners
+    document.getElementById("selectButton").addEventListener("click", () => {
+      const resultEl = document.getElementById("result");
+      const selections = [];
+      let i = 1;
+      for (let group in foodGroups) {
+        if (foodGroups[group].length > 0) {
+          const random = foodGroups[group][Math.floor(Math.random() * foodGroups[group].length)];
+          selections.push(`<div class="bg-gray-600 p-4 rounded-lg mb-3 border-l-4 border-green-500">
+            <strong class="text-lg">Day ${i++}</strong>: ${random} <em class="text-green-300">(${group})</em>
+          </div>`);
+        }
+      }
+      resultEl.innerHTML = `<h3 class="text-2xl text-green-400 mb-4">🥗 Weekly Meal Plan:</h3>${selections.join('')}`;
+    });
+
+    document.getElementById("resetButton").addEventListener("click", () => {
+      document.getElementById("result").innerHTML = "";
+    });
+
+    document.getElementById("addGroupButton").addEventListener("click", () => {
+      const newGroup = document.getElementById("newGroupName").value.trim();
+      if (newGroup && !foodGroups[newGroup]) {
+        foodGroups[newGroup] = [];
+        sendUpdate();
+        document.getElementById("newGroupName").value = "";
+      }
+    });
+
+    document.getElementById("addDishButton").addEventListener("click", () => {
+      const group = document.getElementById("groupSelect").value;
+      const dish = document.getElementById("newDishName").value.trim();
+      if (dish) {
+        foodGroups[group].push(dish);
+        sendUpdate();
+        document.getElementById("newDishName").value = "";
+      }
+    });
+
+    document.getElementById("editDishButton").addEventListener("click", () => {
+      const group = document.getElementById("editGroupSelect").value;
+      const index = document.getElementById("dishSelect").selectedIndex;
+      const newName = document.getElementById("editDishName").value.trim();
+      if (newName) {
+        foodGroups[group][index] = newName;
+        sendUpdate();
+        document.getElementById("editDishName").value = "";
+      }
+    });
+
+    document.getElementById("removeDishButton").addEventListener("click", () => {
+      const group = document.getElementById("editGroupSelect").value;
+      const index = document.getElementById("dishSelect").selectedIndex;
+      if (index > -1) {
+        foodGroups[group].splice(index, 1);
+        sendUpdate();
+      }
+    });
+
+    document.getElementById("removeGroupButton").addEventListener("click", () => {
+      const group = document.getElementById("removeGroupSelect").value;
+      if (confirm(`Remove entire group "${group}"?`)) {
+        delete foodGroups[group];
+        sendUpdate();
+      }
+    });
+
+    document.getElementById("editGroupSelect").addEventListener("change", updateDishDropdown);
+  </script>
+</body>
+</html>
